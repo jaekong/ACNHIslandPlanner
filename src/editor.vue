@@ -14,15 +14,14 @@
             </a>
             <div v-show="mode == 'terrain'">
                 <a :class="{ 'active' : currentOperation == brushes.water }" @click="currentOperation = brushes.water">WATER</a>
-                <a :class="{ 'active' : currentOperation == brushes.water }" @click="currentOperation = brushes.sand">SAND</a>
-                <a :class="{ 'active' : currentOperation == brushes.water }" @click="currentOperation = brushes.level(1)">LAND (1)</a>
-                <a :class="{ 'active' : currentOperation == brushes.water }" @click="currentOperation = brushes.level(2)">LAND (2)</a>
-                <a :class="{ 'active' : currentOperation == brushes.water }" @click="currentOperation = brushes.level(3)">LAND (3)</a>
-                <a :class="{ 'active' : currentOperation == brushes.water }" @click="currentOperation = brushes.path">PATH</a>
+                <a :class="{ 'active' : currentOperation == brushes.sand }" @click="currentOperation = brushes.sand">SAND</a>
+                <a :class="{ 'active' : currentOperation == brushes.land }" @click="currentOperation = brushes.land">LAND</a>
+                <input type="number" v-show="currentOperation == brushes.land" v-model="currentElevation" :max="maxElevation"></input>
+                <a :class="{ 'active' : currentOperation == brushes.path }" @click="currentOperation = brushes.path">PATH</a>
             </div>
-            <div>
+            <div v-show="mode == 'terrain'">
                 Brush Size
-                <input type="number" name="" v-model="brushSize">
+                <input type="number" v-model="brushSize">
             </div>
         </div>
     </main>
@@ -38,7 +37,6 @@ const rows = acreBlocks * 6
 
 const landMargin = 13
 const beachWidth = 8
-const maxElevation = 3
 
 let ppb = 6
 
@@ -46,38 +44,6 @@ const lineDotLength = 0.5
 
 let colorScheme = {
     land: []
-}
-
-let currentColor = undefined
-
-let brushes = {
-    level(elevation) {
-        return (cell) => {
-            return { ...cell,
-                type: 'land',
-                elevation: elevation
-            }
-        }
-    },
-    sand(cell) {
-        return { ...cell,
-            type: 'sand'
-        }
-    },
-    water(cell) {
-        return { ...cell,
-            type: 'water'
-        }
-    },
-    path(cell) {
-        return { ...cell,
-            type: 'path',
-            color: currentColor
-        }
-    },
-    // elevate(cell) {
-    //     return { ...cell, elevation: cell.elevation < maxElevation ? cell.elevation + 1 : maxElevation }
-    // }
 }
 
 function newIsland() {
@@ -111,8 +77,8 @@ function newIsland() {
         author: '',
         map: result,
         entities: [{
-            x: 16,
-            y: 16,
+            x: acreBlocks + Math.floor(Math.random() * (columns - acreBlocks * 2 - 12)),
+            y: acreBlocks + Math.floor(Math.random() *  (rows - acreBlocks * 2 - 10)),
             width: 12,
             height: 10,
             name: 'Residential Service Centre'
@@ -136,10 +102,37 @@ export default {
     data() {
         return {
             island: {},
-            currentOperation: brushes.water,
-            brushSize: 4,
+            currentOperation: () => {},
+            currentElevation: 1,
+            currentEntity: null,
+            currentColor: null,
+            maxElevation: 3,
+            brushSize: 1,
             mode: 'terrain',
-            brushes: brushes,
+            brushes: {
+                land(cell) {
+                    return { ...cell,
+                        type: 'land',
+                        elevation: this.currentElevation
+                    }
+                },
+                sand(cell) {
+                    return { ...cell,
+                        type: 'sand'
+                    }
+                },
+                water(cell) {
+                    return { ...cell,
+                        type: 'water'
+                    }
+                },
+                path(cell) {
+                    return { ...cell,
+                        type: 'path',
+                        color: this.currentColor
+                    }
+                }
+            },
             sketch: (p) => {
                 p.setup = () => {
                     ppb = document.getElementById('canvas').offsetWidth / columns
@@ -154,6 +147,8 @@ export default {
                     colorScheme['water'] = p.color('#9AD9CB')
 
                     colorScheme['default'] = p.color('#B7AB8D')
+
+                    this.currentColor = colorScheme['default']
 
                     this.island = newIsland()
                 }
@@ -216,9 +211,12 @@ export default {
                     }
                 }
 
-                p.mouseIsPressed = () => {
+                p.mousePressed = () => {
                     if (this.mode == 'entity') {
-                        this.island.entities.filter(entity => {
+                        let x = p.floor(p.mouseX / ppb)
+                        let y = p.floor(p.mouseY / ppb)
+
+                        this.currentEntity = this.island.entities.find(entity => {
                             return x < entity.x + entity.width && x > entity.x && y < entity.y + entity.height && y > entity.y
                         })
                     }
@@ -242,8 +240,18 @@ export default {
                                 } else this.island.map[x][y] = this.currentOperation(this.island.map[x][y])
                                 break
                             case 'entity':
+                                if (this.currentEntity) {
+                                    this.currentEntity.x = x - p.ceil(this.currentEntity.width / 2)
+                                    this.currentEntity.y = y - p.ceil(this.currentEntity.height / 2)
+                                }
                                 break
                         }
+                    }
+                }
+
+                p.mouseReleased = () => {
+                    if (this.mode == 'entity' && this.currentEntity) {
+                        this.currentEntity = null
                     }
                 }
             }
@@ -251,6 +259,7 @@ export default {
     },
     mounted() {
         const canvas = new p5(this.sketch, document.querySelector('#canvas'))
+        this.currentOperation = this.brushes.land
     }
 }
 </script>
